@@ -36,12 +36,13 @@ def get_hi(endpoint):
     resp = requests.get(url, headers=get_hi_header())
     return resp.json()
 
-def main():
-    res = get_gh('/users/benpankow/events/public')
-    # print(json.dumps(res, indent=2))
+def get_user_list():
+    res = get_hi('/rsvp/filter/')
+    github_usernames = [user['registrationData']['attendee']['github'] for user in res['rsvps'] if user['isAttending']]
+    return github_usernames
 
-    res = get_hi('/user/filter/')
-    print(json.dumps(res, indent=2))
+def main():
+    usernames = get_user_list()
 
 if __name__== '__main__':
 	main()
