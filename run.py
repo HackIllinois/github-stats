@@ -1,33 +1,46 @@
-from urllib import request, parse
+import requests
 import json
 from datetime import datetime, timedelta
 
 from secrets import *
 
 GITHUB_API_BASE = 'https://api.github.com'
-HACKILLINOIS_TAG = 'hackillinois'
+
+HACKILLINOIS_API_BASE = 'https://api.hackillinois.org'
 
 TOKEN_IDX = 0
 
-def get_header():
+def get_gh_header():
     return {
         'Authorization': 'token ' + OAUTH_TOKENS[TOKEN_IDX],
-        'Accept': 'application/vnd.github.mercy-preview+json'
+        'Accept': 'application/vnd.github.v3+json'
     }
 
-def get(endpoint):
+def get_gh(endpoint):
     url = GITHUB_API_BASE + endpoint
-    req = request.Request(url, headers=get_header())
-    with request.urlopen(req) as response:
-        remaining_reqs = int(response.getheader('X-RateLimit-Remaining'))
-        if remaining_reqs < 5:
-            TOKEN_IDX = (TOKEN_IDX + 1) % len(OAUTH_TOKENS)
-            
-        data = response.read()
-    return json.loads(data)
+    resp = requests.get(url, headers=get_gh_header())
+
+    remaining_reqs = int(resp.headers['x-ratelimit-remaining'])
+    if remaining_reqs < 5:
+        TOKEN_IDX = (TOKEN_IDX + 1) % len(OAUTH_TOKENS)
+    return resp.json()
+
+def get_hi_header():
+    return {
+        'Authorization': HI_JWT,
+        'Content-Type': 'application/json'
+    }
+
+def get_hi(endpoint):
+    url = HACKILLINOIS_API_BASE + endpoint
+    resp = requests.get(url, headers=get_hi_header())
+    return resp.json()
 
 def main():
-    res = get('/users/benpankow/events/public')
+    res = get_gh('/users/benpankow/events/public')
+    # print(json.dumps(res, indent=2))
+
+    res = get_hi('/user/filter/')
     print(json.dumps(res, indent=2))
 
 if __name__== '__main__':
