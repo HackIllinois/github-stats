@@ -36,6 +36,18 @@ def get_hi(endpoint):
     resp = requests.get(url, headers=get_hi_header())
     return resp.json()
 
+def put_hi(endpoint, data):
+    url = HACKILLINOIS_API_BASE + endpoint
+    resp = requests.put(url, data=json.dumps(data), headers=get_hi_header())
+    return resp.json()
+
+def write_blob(blob):
+    blob = {
+        'id': 'git-stats',
+        'data': blob,
+    }
+    return put_hi('/upload/blobstore/', blob)
+
 def get_user_list():
     res = get_hi('/rsvp/filter/')
     github_usernames = [user['registrationData']['attendee']['github'] for user in res['rsvps'] if user['isAttending']]
@@ -43,6 +55,10 @@ def get_user_list():
 
 def main():
     usernames = get_user_list()
-
+    write_blob({
+        'foo': 'bar',
+        'stuff': 123,
+    })
+    
 if __name__== '__main__':
-	main()
+    main()
