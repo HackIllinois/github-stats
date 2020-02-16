@@ -26,36 +26,9 @@ def get(endpoint):
         data = response.read()
     return json.loads(data)
 
-def get_tagged_repos():
-    repos = []
-
-    url = '/search/repositories?q=topic:' + HACKILLINOIS_TAG + '&page={}&per_page=100'
-    page = 1
-    while (True):
-        result = get(url.format(page))
-        page += 1
-        if (len(result['items']) == 0):
-            break
-        for item in result['items']:
-            repos.append(item['full_name'])
-    return repos
-
 def main():
     res = get('/users/benpankow/events/public')
     print(json.dumps(res, indent=2))
-    
-    '''repos = get_tagged_repos()
-
-    since = (datetime.utcnow() - timedelta(hours = 12)).isoformat()
-
-    total_commits = 0
-    commits_url = '/repos/{}/commits?since=' + str(since)
-    for repo in repos:
-        print(commits_url.format(repo))
-        result = get(commits_url.format(repo))
-        total_commits += len(result)
-        #print(json.dumps(result, indent=2))
-    print(total_commits)'''
 
 if __name__== '__main__':
 	main()
