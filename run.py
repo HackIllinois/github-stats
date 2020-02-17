@@ -55,6 +55,18 @@ def get_user_list():
 
 def main():
     usernames = get_user_list()
+
+    total = 0
+    for username in usernames:
+        events = get_gh('/users/' + username + '/events')
+        for event in events:
+            et = event['type']
+            if et == 'PushEvent':
+                total += event['payload']['size']
+            if False and et == 'PullRequestEvent' and event['payload']['action'] == 'opened':
+                print(event['payload']['pull_request']['url'])
+        print(total)
+    print(total)
     write_blob({
         'foo': 'bar',
         'stuff': 123,
