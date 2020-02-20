@@ -68,15 +68,14 @@ total_prs = 0
 
 def main():
     while True:
-        ttime = datetime.now()
-        next_update_time = ttime + TIME_INTERVAL
+        # run update every specified interval
+        # the runtime of run_update is included this window
+        next_update_time = datetime.now() + TIME_INTERVAL
         
         run_update()
 
-        ttime = datetime.now()
-        to_wait = next_update_time - ttime
-        print(to_wait)
-        print(to_wait.total_seconds())
+        cur_time = datetime.now()
+        to_wait = next_update_time - cur_time
         if to_wait.total_seconds() > 0:
             time.sleep(to_wait.total_seconds())
 
