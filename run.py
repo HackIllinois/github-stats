@@ -143,6 +143,7 @@ def main():
                                 "avatar_url": event["actor"]["avatar_url"],
                                 "title": event["payload"]["pull_request"]["title"],
                                 "repo": event["repo"]["name"],
+                                "time": time.mktime(event_time.timetuple()),
                             }
                         ] + pr_feed[: MAX_PR_ENTRIES - 1]
             except TypeError as e:
