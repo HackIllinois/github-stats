@@ -96,11 +96,13 @@ def main():
     total_prs = 0
     total_opened_issues = 0
     total_closed_issues = 0
+    total_loc = 0
     pr_feed = []
     pr_languages = {}
 
     # keep track of seen events so we don't re-process things we've seen already
     seen_ids = set()
+    seen_commits = set()
 
     config = get_blob("git-stats-config")
 
@@ -122,6 +124,7 @@ def main():
         total_closed_issues = last_update_numbers["totalClosedIssues"]
         pr_languages = last_update_numbers["prLanguages"]
         pr_feed = last_update["prFeed"]
+        total_loc = last_update_numbers["totalLoc"]
 
         last_update_time = datetime.fromtimestamp(last_update_numbers["time"], pytz.utc)
 
@@ -132,6 +135,8 @@ def main():
         # run update every specified interval
         # the runtime of run_update is included this window
         next_update_time = datetime.now(pytz.utc) + time_interval
+
+        commits = []
 
         # run one update
         usernames = get_user_list()
@@ -161,6 +166,12 @@ def main():
                             total_closed_issues += 1
                     if et == "PushEvent":
                         total_commits += event["payload"]["size"]
+                        for commit in event["payload"]["commits"]:
+                            sha = commit["sha"]
+                            if sha in seen_commits:
+                                continue
+                            seen_commits.add(sha)
+                            commits.append(commit["url"])
                     if (
                         et == "PullRequestEvent"
                         and event["payload"]["action"] == "opened"
@@ -185,6 +196,14 @@ def main():
             except TypeError as e:
                 print(f"Error processing user {username}: {e}")
 
+        for commit in commits:
+            try:
+                info = get_gh(commit[22:])
+                if "stats" in info:
+                    total_loc += info["stats"]["total"]
+            except TypeError as e:
+                print(f"Error processing commit: {e}")
+
         last_update_time = round(datetime.now(pytz.utc).timestamp())
 
         print(f"Completed update at {last_update_time}")
@@ -200,6 +219,7 @@ def main():
                 "totalOpenedIssues": total_opened_issues,
                 "totalClosedIssues": total_closed_issues,
                 "prLanguages": pr_languages,
+                "totalLoc": total_loc,
                 "time": last_update_time,
             }
         ] + blob["history"][: max_hist_entries - 1]
