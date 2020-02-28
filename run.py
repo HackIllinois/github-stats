@@ -10,10 +10,6 @@ GITHUB_API_BASE = "https://api.github.com"
 
 HACKILLINOIS_API_BASE = "https://api.hackillinois.org"
 
-TIME_INTERVAL = timedelta(seconds=30)
-
-CUTOFF_TIME = datetime(2020, 2, 19, tzinfo=pytz.timezone("America/Chicago"))
-
 MAX_HIST_ENTRIES = 25
 MAX_PR_ENTRIES = 25
 
@@ -55,10 +51,16 @@ def put_hi(endpoint, data):
     return resp.json()
 
 
-def write_blob(blob):
-    """Writes an arbitrary Python dict to the 'git-stats' blobstore entry."""
+def get_blob(name):
+    """Gets the JSON object associated with the given blobstore entry."""
 
-    blob = {"id": "git-stats", "data": blob}
+    return get_hi(f"/upload/blobstore/{name}/")["data"]
+
+
+def write_blob(name, blob):
+    """Writes an arbitrary Python dict to the given blobstore entry."""
+
+    blob = {"id": name, "data": blob}
     return put_hi("/upload/blobstore/", blob)
 
 
@@ -75,7 +77,12 @@ def get_user_list():
 
     ids_query = ",".join(user_ids)
     res = get_hi(f"/registration/attendee/filter/?id={ids_query}")
-    github_usernames = [user["github"] for user in res["registrations"]]
+    attendee_github_usernames = [user["github"] for user in res["registrations"]]
+
+    res = get_hi(f"/registration/mentor/filter/")
+    mentor_github_usernames = [user["github"] for user in res["registrations"]]
+
+    github_usernames = list(set(mentor_github_usernames + attendee_github_usernames))
 
     return github_usernames
 
@@ -93,10 +100,34 @@ def main():
     # keep track of seen events so we don't re-process things we've seen already
     seen_ids = set()
 
+    config = get_blob("git-stats-config")
+    time_interval = timedelta(seconds=config["interval_secs"])
+    cutoff_time = datetime.fromtimestamp(config["cutoff_time"], pytz.utc)
+
+    last_update_time = cutoff_time
+
+    # see if stats has run previously, if so get most recent data
+    last_update = get_blob("git-stats")
+    if "history" in last_update and len(last_update["history"]) > 0:
+        blob = last_update
+
+        last_update_numbers = last_update["history"][0]
+        total_commits = last_update_numbers["total_commits"]
+        total_prs = last_update_numbers["total_prs"]
+        total_opened_issues = last_update_numbers["total_opened_issues"]
+        total_closed_issues = last_update_numbers["total_closed_issues"]
+        pr_languages = last_update_numbers["pr_languages"]
+        pr_feed = last_update["pr_feed"]
+
+        last_update_time = datetime.fromtimestamp(last_update_numbers["time"], pytz.utc)
+
+    # only look at events newer than both the cutoff time and the last update
+    if last_update_time > cutoff_time:
+        cutoff_time = last_update_time
     while True:
         # run update every specified interval
         # the runtime of run_update is included this window
-        next_update_time = datetime.now() + TIME_INTERVAL
+        next_update_time = datetime.now(pytz.utc) + time_interval
 
         # run one update
         usernames = get_user_list()
@@ -111,7 +142,8 @@ def main():
                         "Z", "+00:00"
                     )  # hack to get fromisoformat to work
                     event_time = datetime.fromisoformat(event_time)
-                    if event_time <= CUTOFF_TIME:
+
+                    if event_time < cutoff_time:
                         break
                     if event["id"] in seen_ids:
                         break
@@ -143,13 +175,14 @@ def main():
                                 "avatar_url": event["actor"]["avatar_url"],
                                 "title": event["payload"]["pull_request"]["title"],
                                 "repo": event["repo"]["name"],
-                                "time": time.mktime(event_time.timetuple()),
+                                "time": round(event_time.timestamp()),
                             }
                         ] + pr_feed[: MAX_PR_ENTRIES - 1]
             except TypeError as e:
                 print(f"Error processing user {username}: {e}")
 
-        last_update_time = time.mktime(datetime.now().timetuple())
+        last_update_time = round(datetime.now(pytz.utc).timestamp())
+
         print(f"Completed update at {last_update_time}")
 
         blob["last_updated"] = last_update_time
@@ -166,9 +199,9 @@ def main():
             }
         ] + blob["history"][: MAX_HIST_ENTRIES - 1]
 
-        write_blob(blob)
+        write_blob("git-stats", blob)
 
-        cur_time = datetime.now()
+        cur_time = datetime.now(pytz.utc)
         to_wait = next_update_time - cur_time
         if to_wait.total_seconds() > 0:
             time.sleep(to_wait.total_seconds())
