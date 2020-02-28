@@ -3,6 +3,7 @@ import json
 from datetime import datetime, timedelta
 import time
 import pytz
+import sys
 
 from secrets import *
 
@@ -10,7 +11,6 @@ GITHUB_API_BASE = "https://api.github.com"
 
 HACKILLINOIS_API_BASE = "https://api.hackillinois.org"
 
-MAX_HIST_ENTRIES = 25
 MAX_PR_ENTRIES = 25
 
 token_idx = 0
@@ -30,6 +30,8 @@ def get_gh(endpoint):
     resp = requests.get(url, headers=get_gh_header())
 
     remaining_reqs = int(resp.headers["x-ratelimit-remaining"])
+    if remaining_reqs % 1000 == 0:
+        print(f"{remaining_reqs} left")
     if remaining_reqs < 5:
         token_idx = (token_idx + 1) % len(OAUTH_TOKENS)
     return resp.json()
@@ -101,8 +103,10 @@ def main():
     seen_ids = set()
 
     config = get_blob("git-stats-config")
-    time_interval = timedelta(seconds=config["interval_secs"])
-    cutoff_time = datetime.fromtimestamp(config["cutoff_time"], pytz.utc)
+
+    max_hist_entries = config["maxHistEntries"]
+    time_interval = timedelta(seconds=config["intervalSecs"])
+    cutoff_time = datetime.fromtimestamp(config["cutoffTime"], pytz.utc)
 
     last_update_time = cutoff_time
 
@@ -112,12 +116,12 @@ def main():
         blob = last_update
 
         last_update_numbers = last_update["history"][0]
-        total_commits = last_update_numbers["total_commits"]
-        total_prs = last_update_numbers["total_prs"]
-        total_opened_issues = last_update_numbers["total_opened_issues"]
-        total_closed_issues = last_update_numbers["total_closed_issues"]
-        pr_languages = last_update_numbers["pr_languages"]
-        pr_feed = last_update["pr_feed"]
+        total_commits = last_update_numbers["totalCommits"]
+        total_prs = last_update_numbers["totalPRs"]
+        total_opened_issues = last_update_numbers["totalOpenedIssues"]
+        total_closed_issues = last_update_numbers["totalClosedIssues"]
+        pr_languages = last_update_numbers["prLanguages"]
+        pr_feed = last_update["prFeed"]
 
         last_update_time = datetime.fromtimestamp(last_update_numbers["time"], pytz.utc)
 
@@ -172,7 +176,7 @@ def main():
                         pr_feed = [
                             {
                                 "name": event["actor"]["display_login"],
-                                "avatar_url": event["actor"]["avatar_url"],
+                                "avatarUrl": event["actor"]["avatar_url"],
                                 "title": event["payload"]["pull_request"]["title"],
                                 "repo": event["repo"]["name"],
                                 "time": round(event_time.timestamp()),
@@ -184,20 +188,21 @@ def main():
         last_update_time = round(datetime.now(pytz.utc).timestamp())
 
         print(f"Completed update at {last_update_time}")
+        sys.stdout.flush()
 
-        blob["last_updated"] = last_update_time
-        blob["pr_feed"] = pr_feed
+        blob["lastUpdated"] = last_update_time
+        blob["prFeed"] = pr_feed
         # add new history entry, store up to MAX_ENTRIES of these
         blob["history"] = [
             {
-                "total_commits": total_commits,
-                "total_prs": total_prs,
-                "total_opened_issues": total_opened_issues,
-                "total_closed_issues": total_closed_issues,
-                "pr_languages": pr_languages,
+                "totalCommits": total_commits,
+                "totalPRs": total_prs,
+                "totalOpenedIssues": total_opened_issues,
+                "totalClosedIssues": total_closed_issues,
+                "prLanguages": pr_languages,
                 "time": last_update_time,
             }
-        ] + blob["history"][: MAX_HIST_ENTRIES - 1]
+        ] + blob["history"][: max_hist_entries - 1]
 
         write_blob("git-stats", blob)
 
