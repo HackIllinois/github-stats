@@ -109,6 +109,7 @@ def main():
     max_hist_entries = config["maxHistEntries"]
     time_interval = timedelta(seconds=config["intervalSecs"])
     cutoff_time = datetime.fromtimestamp(config["cutoffTime"], pytz.utc)
+    og_cutoff_time = cutoff_time
 
     last_update_time = cutoff_time
 
@@ -165,7 +166,7 @@ def main():
                         if event["payload"]["action"] == "closed":
                             total_closed_issues += 1
                     if et == "PushEvent":
-                        total_commits += event["payload"]["size"]
+                        # total_commits += event["payload"]["size"]
                         for commit in event["payload"]["commits"]:
                             sha = commit["sha"]
                             if sha in seen_commits:
@@ -199,10 +200,23 @@ def main():
         for commit in commits:
             try:
                 info = get_gh(commit[22:])
-                if "stats" in info:
-                    total_loc += info["stats"]["total"]
+                if "commit" in info and "author" in info["commit"]:
+                    event_time = info["commit"]["author"]["date"]
+                    event_time = event_time.replace(
+                        "Z", "+00:00"
+                    )  # hack to get fromisoformat to work
+                    event_time = datetime.fromisoformat(event_time)
+
+                    if event_time < og_cutoff_time:
+                        break
+
+                    total_commits += 1
+
+                    if "stats" in info:
+                        total_loc += info["stats"]["total"]
             except TypeError as e:
                 print(f"Error processing commit: {e}")
+        return
 
         last_update_time = round(datetime.now(pytz.utc).timestamp())
 
